@@ -1,0 +1,101 @@
+const chai = require('chai');
+const chaiHttp = require('chai-http');
+const { MongoClient } = require('mongodb');
+const { describe, it, before, after } = require('mocha');
+const app = require('./your-api-server'); // Replace with the path to your API server file or module
+
+chai.use(chaiHttp);
+const { expect } = chai;
+
+describe('API Server Tests', () => {
+  let connection;
+  let db;
+
+  before(async () => {
+    connection = await MongoClient.connect('mongodb://localhost:27017');
+    db = connection.db('test-db');
+  });
+
+  after(async () => {
+    await connection.close();
+  });
+
+  describe('POST /api/documents', () => {
+    it('should create a new document', async () => {
+      const document = { name: 'John Doe', age: 25 };
+
+      const res = await chai
+        .request(app)
+        .post('/api/documents')
+        .send(document);
+
+      expect(res).to.have.status(201);
+      expect(res.body).to.have.property('id');
+      expect(res.body.name).to.equal(document.name);
+      expect(res.body.age).to.equal(document.age);
+    });
+  });
+
+  describe('GET /api/documents/:id', () => {
+    let documentId;
+
+    before(async () => {
+      const document = { name: 'Jane Smith', age: 30 };
+      const result = await db.collection('documents').insertOne(document);
+      documentId = result.insertedId.toString();
+    });
+
+    it('should retrieve a document by ID', async () => {
+      const res = await chai.request(app).get(`/api/documents/${documentId}`);
+      expect(res).to.have.status(200);
+      expect(res.body).to.have.property('id');
+      expect(res.body.name).to.equal('Jane Smith');
+      expect(res.body.age).to.equal(30);
+    });
+
+    it('should return 404 for a non-existing document', async () => {
+      const nonExistingId = 'non-existing-id';
+      const res = await chai.request(app).get(`/api/documents/${nonExistingId}`);
+      expect(res).to.have.status(404);
+    });
+  });
+
+  describe('PUT /api/documents/:id', () => {
+    let documentId;
+
+    before(async () => {
+      const document = { name: 'Alex Johnson', age: 40 };
+      const result = await db.collection('documents').insertOne(document);
+      documentId = result.insertedId.toString();
+    });
+
+    it('should update an existing document', async () => {
+      const updatedFields = { age: 41 };
+      const res = await chai
+        .request(app)
+        .put(`/api/documents/${documentId}`)
+        .send(updatedFields);
+
+      expect(res).to.have.status(200);
+      expect(res.body).to.have.property('id');
+      expect(res.body.age).to.equal(41);
+    });
+  });
+
+  describe('DELETE /api/documents/:id', () => {
+    let documentId;
+
+    before(async () => {
+      const document = { name: 'Emily Davis', age: 35 };
+      const result = await db.collection('documents').insertOne(document);
+      documentId = result.insertedId.toString();
+    });
+
+    it('should delete an existing document', async () => {
+      const res = await chai.request(app).delete(`/api/documents/${documentId}`);
+      expect(res).to.have.status(200);
+      expect(res.body).to.have.property('message');
+      expect(res.body.message).to.equal('Document deleted successfully');
+    });
+  });
+});
